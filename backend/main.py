@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, HTMLResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -164,6 +164,199 @@ async def metrics():
         "tasa_resolucion": round((resueltas / total * 100), 1) if total > 0 else 0,
         "ultima_actualizacion": metricas["ultima_actualizacion"]
     }
+
+
+@app.get("/admin", tags=["Admin"])
+async def admin_dashboard():
+    """Dashboard de metricas para administracion."""
+    metricas = cargar_metricas()
+    total = metricas["total_preguntas"]
+    resueltas = metricas["preguntas_resueltas"]
+    escaladas = metricas["preguntas_escaladas"]
+    tasa = round((resueltas / total * 100), 1) if total > 0 else 0
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Panel de Estadisticas - Banco de Bogota</title>
+        <style>
+            * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+            body {{
+                font-family: 'Segoe UI', sans-serif;
+                background: #F4F6FA;
+                min-height: 100vh;
+                padding: 40px 20px;
+            }}
+            .container {{ max-width: 900px; margin: 0 auto; }}
+            .header {{
+                background: linear-gradient(135deg, #0033A0, #002280);
+                color: white;
+                padding: 30px;
+                border-radius: 16px;
+                margin-bottom: 30px;
+                text-align: center;
+            }}
+            .header h1 {{ font-size: 28px; margin-bottom: 8px; }}
+            .header p {{ opacity: 0.8; font-size: 14px; }}
+            .grid {{
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 20px;
+                margin-bottom: 30px;
+            }}
+            .card {{
+                background: white;
+                padding: 24px;
+                border-radius: 12px;
+                text-align: center;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            }}
+            .card .number {{
+                font-size: 36px;
+                font-weight: 700;
+                margin-bottom: 8px;
+            }}
+            .card .label {{
+                font-size: 13px;
+                color: #6B7280;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }}
+            .card.total .number {{ color: #0033A0; }}
+            .card.resueltas .number {{ color: #10B981; }}
+            .card.escaladas .number {{ color: #F59E0B; }}
+            .card.tasa .number {{ color: #0033A0; }}
+            .chart-section {{
+                background: white;
+                padding: 30px;
+                border-radius: 12px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            }}
+            .chart-title {{
+                font-size: 18px;
+                font-weight: 600;
+                color: #1F2937;
+                margin-bottom: 20px;
+            }}
+            .progress-bar {{
+                height: 24px;
+                background: #E5E7EB;
+                border-radius: 12px;
+                overflow: hidden;
+                display: flex;
+            }}
+            .progress-resueltas {{
+                background: #10B981;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-size: 12px;
+                font-weight: 600;
+            }}
+            .progress-escaladas {{
+                background: #F59E0B;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-size: 12px;
+                font-weight: 600;
+            }}
+            .legend {{
+                display: flex;
+                justify-content: center;
+                gap: 30px;
+                margin-top: 16px;
+                font-size: 13px;
+            }}
+            .legend span {{
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }}
+            .legend .dot {{
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+            }}
+            .dot.green {{ background: #10B981; }}
+            .dot.yellow {{ background: #F59E0B; }}
+            .refresh {{
+                text-align: center;
+                margin-top: 30px;
+            }}
+            .refresh a {{
+                background: #0033A0;
+                color: white;
+                padding: 12px 24px;
+                border-radius: 8px;
+                text-decoration: none;
+                font-weight: 500;
+                display: inline-block;
+            }}
+            .refresh a:hover {{ background: #002280; }}
+            .footer {{
+                text-align: center;
+                margin-top: 30px;
+                color: #6B7280;
+                font-size: 12px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Banco de Bogota</h1>
+                <p>Panel de Estadisticas - Asistente Virtual</p>
+            </div>
+            
+            <div class="grid">
+                <div class="card total">
+                    <div class="number">{total}</div>
+                    <div class="label">Total Preguntas</div>
+                </div>
+                <div class="card resueltas">
+                    <div class="number">{resueltas}</div>
+                    <div class="label">Resueltas</div>
+                </div>
+                <div class="card escaladas">
+                    <div class="number">{escaladas}</div>
+                    <div class="label">Escaladas</div>
+                </div>
+                <div class="card tasa">
+                    <div class="number">{tasa}%</div>
+                    <div class="label">Tasa Resolucion</div>
+                </div>
+            </div>
+            
+            <div class="chart-section">
+                <div class="chart-title">Distribucion de Preguntas</div>
+                <div class="progress-bar">
+                    <div class="progress-resueltas" style="width: {tasa}%">{tasa}%</div>
+                    <div class="progress-escaladas" style="width: {100-tasa}%">{100-tasa}%</div>
+                </div>
+                <div class="legend">
+                    <span><div class="dot green"></div> Resueltas por IA</span>
+                    <span><div class="dot yellow"></div> Escaladas a humanos</span>
+                </div>
+            </div>
+            
+            <div class="refresh">
+                <a href="/admin">Actualizar</a>
+            </div>
+            
+            <div class="footer">
+                Ultima actualizacion: {metricas.get('ultima_actualizacion', 'N/A')}
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
 
 
 @app.post("/metrics/reset", tags=["Metrics"])
