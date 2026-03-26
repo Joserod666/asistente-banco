@@ -307,16 +307,8 @@ export default function App() {
   return (
     <>
       <style>{`
-        @font-face {
-          font-family: 'Kiffo BDB';
-          src: url('/fonts/Banco/Banco.ttf') format('truetype');
-          font-weight: normal;
-          font-style: normal;
-          font-display: swap;
-        }
-        
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: ${COLORES.fondo}; font-family: 'Kiffo BDB', 'Segoe UI', sans-serif; }
+        body { background: ${COLORES.fondo}; font-family: 'Montserrat', 'Segoe UI', sans-serif; }
         
         @keyframes bounce {
           0%, 60%, 100% { transform: translateY(0); }
@@ -358,7 +350,7 @@ export default function App() {
         flexDirection: "column",
         alignItems: "center",
         padding: "0",
-        fontFamily: "'Kiffo BDB', 'Segoe UI', sans-serif"
+        fontFamily: "'Montserrat', 'Segoe UI', sans-serif"
       }}>
 
         {/* Header */}
