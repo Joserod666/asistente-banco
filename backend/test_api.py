@@ -1,64 +1,130 @@
 """
-Script de pruebas para el Asistente del Banco de Bogotá
+Tests automatizados para el Asistente del Banco de Bogota
 Uso: python test_api.py
+Requiere: requests (pip install requests)
 """
 
 import requests
 import time
 import json
-from typing import Dict, Any
+from typing import Tuple, Optional
 
 BASE_URL = "http://127.0.0.1:8000"
+TIMEOUT = 30
 
-def test_health():
-    """Prueba 1: Endpoint de salud"""
-    print("\n[1] Health check")
+
+def print_result(name: str, passed: bool, detail: str = ""):
+    status = "[PASS]" if passed else "[FAIL]"
+    print(f"   {status} - {name}")
+    if detail:
+        print(f"         {detail}")
+
+
+def test_health() -> bool:
+    """Endpoint de salud para monitoreo"""
     try:
         resp = requests.get(f"{BASE_URL}/health", timeout=5)
-        assert resp.status_code == 200
-        print(f"    [OK] - {resp.json()}")
-        return True
+        data = resp.json()
+        passed = resp.status_code == 200 and data.get("status") == "ok"
+        print_result("Health check", passed, str(data))
+        return passed
     except Exception as e:
-        print(f"    [FAIL] - {e}")
+        print_result("Health check", False, str(e))
         return False
 
 
-def test_swagger():
-    """Prueba 2: Swagger disponible"""
-    print("\n[2] Swagger UI")
+def test_root() -> bool:
+    """Endpoint raiz"""
+    try:
+        resp = requests.get(f"{BASE_URL}/", timeout=5)
+        data = resp.json()
+        passed = resp.status_code == 200
+        print_result("Root endpoint", passed, str(data))
+        return passed
+    except Exception as e:
+        print_result("Root endpoint", False, str(e))
+        return False
+
+
+def test_swagger() -> bool:
+    """Documentacion API (Swagger UI)"""
     try:
         resp = requests.get(f"{BASE_URL}/docs", timeout=5)
-        assert resp.status_code == 200
-        print(f"    [OK] - Swagger disponible en /docs")
-        return True
+        passed = resp.status_code == 200 and "swagger" in resp.text.lower()
+        print_result("Swagger UI", passed, "Disponible en /docs")
+        return passed
     except Exception as e:
-        print(f"    [FAIL] - {e}")
+        print_result("Swagger UI", False, str(e))
         return False
 
 
-def test_chat_basico():
-    """Prueba 3: Chat basico"""
-    print("\n[3] Chat basico")
+def test_metrics_api() -> bool:
+    """Endpoint de metricas (JSON)"""
+    try:
+        resp = requests.get(f"{BASE_URL}/metrics", timeout=5)
+        data = resp.json()
+        required_fields = ["total_preguntas", "preguntas_resueltas", "tasa_resolucion"]
+        passed = resp.status_code == 200 and all(f in data for f in required_fields)
+        print_result("Metrics API", passed, f"Tasa: {data.get('tasa_resolucion', 0)}%")
+        return passed
+    except Exception as e:
+        print_result("Metrics API", False, str(e))
+        return False
+
+
+def test_admin_dashboard() -> bool:
+    """Dashboard HTML de administracion"""
+    try:
+        resp = requests.get(f"{BASE_URL}/admin", timeout=5)
+        passed = (
+            resp.status_code == 200 and
+            resp.headers.get("content-type", "").startswith("text/html") and
+            "Banco de Bogota" in resp.text
+        )
+        print_result("Admin Dashboard", passed, "HTML disponible en /admin")
+        return passed
+    except Exception as e:
+        print_result("Admin Dashboard", False, str(e))
+        return False
+
+
+def test_reset_metrics() -> bool:
+    """Reset de metricas"""
+    try:
+        resp = requests.post(f"{BASE_URL}/metrics/reset", timeout=5)
+        metrics = requests.get(f"{BASE_URL}/metrics", timeout=5).json()
+        passed = resp.status_code == 200 and metrics.get("total_preguntas") == 0
+        print_result("Reset Metrics", passed, f"Total: {metrics.get('total_preguntas')}")
+        return passed
+    except Exception as e:
+        print_result("Reset Metrics", False, str(e))
+        return False
+
+
+def test_chat_basico() -> bool:
+    """Chat basico sin historial"""
     try:
         resp = requests.post(
             f"{BASE_URL}/chat",
             json={"texto": "Que es SARLAFT?"},
-            timeout=30
+            timeout=TIMEOUT
         )
-        assert resp.status_code == 200
         data = resp.json()
-        assert "respuesta" in data
-        assert "fuentes" in data
-        print(f"    [OK] - Respuesta recibida ({len(data['respuesta'])} chars)")
-        return True
+        passed = (
+            resp.status_code == 200 and
+            "respuesta" in data and
+            "fuentes" in data
+        )
+        detail = f"{len(data.get('respuesta', ''))} chars" if passed else str(data)
+        print_result("Chat basico", passed, detail)
+        return passed
     except Exception as e:
-        print(f"    [FAIL] - {e}")
+        print_result("Chat basico", False, str(e))
         return False
 
 
-def test_chat_con_historial():
-    """Prueba 4: Historial de conversacion"""
-    print("\n[4] Historial de conversacion")
+def test_chat_con_historial() -> bool:
+    """Chat con historial de conversacion"""
     try:
         historial = [
             {"rol": "usuario", "texto": "Que documentos necesito para abrir una cuenta?"},
@@ -70,31 +136,47 @@ def test_chat_con_historial():
                 "texto": "Y si es una empresa SAS?",
                 "historial": historial
             },
-            timeout=30
+            timeout=TIMEOUT
         )
-        assert resp.status_code == 200
-        print(f"    [OK] - Historial enviado y procesado")
-        return True
+        passed = resp.status_code == 200 and "respuesta" in resp.json()
+        print_result("Chat con historial", passed)
+        return passed
     except Exception as e:
-        print(f"    [FAIL] - {e}")
+        print_result("Chat con historial", False, str(e))
         return False
 
 
-def test_streaming():
-    """Prueba 5: Streaming SSE"""
-    print("\n[5] Streaming SSE")
+def test_confianza_baja() -> bool:
+    """Deteccion de baja confianza"""
+    try:
+        resp = requests.post(
+            f"{BASE_URL}/chat",
+            json={"texto": "xyz123 fuera de contexto aleatorio 456"},
+            timeout=TIMEOUT
+        )
+        data = resp.json()
+        passed = resp.status_code == 200 and "confianza" in data
+        print_result("Baja confianza", passed, f"Confianza: {data.get('confianza')}")
+        return passed
+    except Exception as e:
+        print_result("Baja confianza", False, str(e))
+        return False
+
+
+def test_streaming() -> bool:
+    """Respuesta en streaming (SSE)"""
     try:
         resp = requests.post(
             f"{BASE_URL}/chat/stream",
             json={"texto": "Cual es el proceso de vinculacion?"},
             stream=True,
-            timeout=60
+            timeout=TIMEOUT + 10
         )
-        assert resp.status_code == 200
         
-        chunks_recibidos = 0
+        chunks = 0
         fuentes = None
         confianza = None
+        fin = False
         
         for line in resp.iter_lines():
             if line:
@@ -106,106 +188,121 @@ def test_streaming():
                     elif data['tipo'] == 'confianza':
                         confianza = data['valor']
                     elif data['tipo'] == 'chunk':
-                        chunks_recibidos += 1
+                        chunks += 1
                     elif data['tipo'] == 'fin':
-                        break
+                        fin = True
         
-        assert chunks_recibidos > 0, "No se recibieron chunks"
-        print(f"    [OK] - {chunks_recibidos} chunks, fuentes={fuentes}, confianza={confianza}")
-        return True
+        passed = chunks > 0 and fin
+        print_result("Streaming SSE", passed, f"{chunks} chunks, fin={fin}")
+        return passed
     except Exception as e:
-        print(f"    [FAIL] - {e}")
+        print_result("Streaming SSE", False, str(e))
         return False
 
 
-def test_confianza_baja():
-    """Prueba 6: Deteccion de baja confianza"""
-    print("\n[6] Baja confianza (pregunta fuera de contexto)")
+def test_rate_limit() -> bool:
+    """Rate limiting (20/min)"""
     try:
-        resp = requests.post(
-            f"{BASE_URL}/chat",
-            json={"texto": "xyz123 fuera de contexto 456"},
-            timeout=30
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        confianza = data.get("confianza", True)
-        print(f"    [{'OK' if not confianza else 'WARN'}] - Confianza: {confianza}")
-        return True
-    except Exception as e:
-        print(f"    [FAIL] - {e}")
-        return False
-
-
-def test_rate_limit():
-    """Prueba 7: Rate limiting"""
-    print("\n[7] Rate limiting (enviando 22 peticiones...)")
-    try:
-        errores_429 = 0
-        exitosas = 0
+        denegadas = 0
+        aceptadas = 0
         
-        for i in range(22):
+        for i in range(25):
             try:
                 resp = requests.post(
                     f"{BASE_URL}/chat",
-                    json={"texto": f"Test {i}"},
+                    json={"texto": f"Test rate limit {i}"},
                     timeout=10
                 )
                 if resp.status_code == 429:
-                    errores_429 += 1
+                    denegadas += 1
                 elif resp.status_code == 200:
-                    exitosas += 1
+                    aceptadas += 1
             except requests.exceptions.RequestException:
                 pass
-            time.sleep(0.1)
+            time.sleep(0.05)
         
-        print(f"    [{'OK' if errores_429 > 0 else 'WARN'}] - Rate limit: {errores_429} denegadas, {exitosas} aceptadas")
-        return True
+        passed = denegadas > 0
+        print_result("Rate limiting", passed, f"{denegadas} denegadas, {aceptadas} aceptadas")
+        return passed
     except Exception as e:
-        print(f"    [FAIL] - {e}")
+        print_result("Rate limiting", False, str(e))
         return False
 
 
-def test_error_servidor():
-    """Prueba 8: Manejo de errores (backend apagado)"""
-    print("\n[8] Error de conexion (simulado)")
-    print("    [INFO] Esta prueba requiere que el backend este apagado")
-    return True
+def test_metrics_increment() -> bool:
+    """Verificar que las metricas se incrementan"""
+    try:
+        before = requests.get(f"{BASE_URL}/metrics", timeout=5).json()
+        before_total = before.get("total_preguntas", 0)
+        
+        requests.post(
+            f"{BASE_URL}/chat",
+            json={"texto": "Test increment metrics"},
+            timeout=TIMEOUT
+        )
+        
+        after = requests.get(f"{BASE_URL}/metrics", timeout=5).json()
+        after_total = after.get("total_preguntas", 0)
+        
+        passed = after_total > before_total
+        print_result("Metrics incrementan", passed, f"{before_total} -> {after_total}")
+        return passed
+    except Exception as e:
+        print_result("Metrics incrementan", False, str(e))
+        return False
 
 
-def main():
+def run_tests():
+    """Ejecuta todas las pruebas"""
+    print("\n" + "=" * 60)
+    print("PRUEBAS AUTOMATIZADAS - Asistente Banco de Bogota")
     print("=" * 60)
-    print("PRUEBAS - Asistente Banco de Bogota")
-    print("=" * 60)
+    print(f"URL Base: {BASE_URL}")
+    print("=" * 60 + "\n")
     
-    resultados = []
+    tests = [
+        ("Infraestructura", [
+            test_health,
+            test_root,
+            test_swagger,
+        ]),
+        ("Metricas", [
+            test_metrics_api,
+            test_admin_dashboard,
+            test_reset_metrics,
+        ]),
+        ("Chat", [
+            test_chat_basico,
+            test_chat_con_historial,
+            test_confianza_baja,
+            test_streaming,
+            test_metrics_increment,
+        ]),
+        ("Seguridad", [
+            test_rate_limit,
+        ]),
+    ]
     
-    resultados.append(("Health check", test_health()))
-    resultados.append(("Swagger UI", test_swagger()))
-    resultados.append(("Chat basico", test_chat_basico()))
-    resultados.append(("Historial", test_chat_con_historial()))
-    resultados.append(("Streaming", test_streaming()))
-    resultados.append(("Baja confianza", test_confianza_baja()))
-    resultados.append(("Rate limit", test_rate_limit()))
-    resultados.append(("Errores", test_error_servidor()))
+    total_passed = 0
+    total_tests = 0
+    
+    for category, test_functions in tests:
+        print(f"\n--- {category} ---")
+        for test in test_functions:
+            total_tests += 1
+            if test():
+                total_passed += 1
     
     print("\n" + "=" * 60)
     print("RESUMEN")
     print("=" * 60)
+    print(f"\n   Pruebas aprobadas: {total_passed}/{total_tests}")
+    print(f"   Porcentaje: {round(total_passed/total_tests*100, 1)}%")
+    print("=" * 60 + "\n")
     
-    passed = sum(1 for _, ok in resultados if ok)
-    total = len(resultados)
-    
-    for name, ok in resultados:
-        status = "[PASS]" if ok else "[FAIL]"
-        print(f"   {status} - {name}")
-    
-    print(f"\n   Total: {passed}/{total} pruebas aprobadas")
-    print("=" * 60)
-    
-    return passed == total
+    return total_passed == total_tests
 
 
 if __name__ == "__main__":
-    success = main()
+    success = run_tests()
     exit(0 if success else 1)
