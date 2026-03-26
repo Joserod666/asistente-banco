@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ejemplo - Widget Banco de Bogotá</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f4f6fa;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .header {
+      text-align: center;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .header h1 { color: #0033A0; margin-bottom: 8px; }
+    .header p { color: #6B7280; }
+    .demo-container {
+      max-width: 420px;
+      margin: 0 auto;
+    }
+    .config {
+      background: white;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: #6B7280;
+    }
+    #banco-chat {
+      height: 600px;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Banco de Bogotá</h1>
+    <p>Ejemplo de widget embebido</p>
+  </div>
+
+  <div class="demo-container">
+    <div class="config">
+      <strong>Configuración:</strong><br>
+      Ancho: 100% · Alto: 600px
+    </div>
+    <div id="banco-chat"></div>
+  </div>
+
+  <script src="widget.js"></script>
+  <script>
+    BancoChat.init({
+      container: '#banco-chat',
+      height: '600px',
+      apiUrl: 'http://127.0.0.1:8000'
+    });
+  </script>
+</body>
+</html>
