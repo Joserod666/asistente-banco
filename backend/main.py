@@ -6,6 +6,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from pydantic import BaseModel
 from typing import Optional, List
+from datetime import datetime
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_groq import ChatGroq
@@ -14,6 +15,8 @@ from langchain_core.output_parsers import StrOutputParser
 from dotenv import load_dotenv
 import traceback
 import json
+import os
+from pathlib import Path
 
 load_dotenv()
 
@@ -28,6 +31,39 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+METRICS_FILE = Path("metrics.json")
+
+def cargar_metricas():
+    if METRICS_FILE.exists():
+        with open(METRICS_FILE, "r") as f:
+            return json.load(f)
+    return {
+        "total_preguntas": 0,
+        "preguntas_resueltas": 0,
+        "preguntas_escaladas": 0,
+        "sesiones_iniciadas": 0,
+        "ultima_actualizacion": None
+    }
+
+def guardar_metricas(metricas):
+    metricas["ultima_actualizacion"] = datetime.now().isoformat()
+    with open(METRICS_FILE, "w") as f:
+        json.dump(metricas, f, indent=2)
+
+def registrar_interaccion(confianza: bool):
+    metricas = cargar_metricas()
+    metricas["total_preguntas"] += 1
+    if confianza:
+        metricas["preguntas_resueltas"] += 1
+    else:
+        metricas["preguntas_escaladas"] += 1
+    guardar_metricas(metricas)
+
+def registrar_sesion():
+    metricas = cargar_metricas()
+    metricas["sesiones_iniciadas"] += 1
+    guardar_metricas(metricas)
 
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
@@ -113,6 +149,36 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/metrics", tags=["Metrics"])
+async def metrics():
+    """Obtener metricas de uso del asistente."""
+    metricas = cargar_metricas()
+    total = metricas["total_preguntas"]
+    resueltas = metricas["preguntas_resueltas"]
+    
+    return {
+        "total_preguntas": total,
+        "preguntas_resueltas": resueltas,
+        "preguntas_escaladas": metricas["preguntas_escaladas"],
+        "sesiones_iniciadas": metricas["sesiones_iniciadas"],
+        "tasa_resolucion": round((resueltas / total * 100), 1) if total > 0 else 0,
+        "ultima_actualizacion": metricas["ultima_actualizacion"]
+    }
+
+
+@app.post("/metrics/reset", tags=["Metrics"])
+async def reset_metrics():
+    """Reiniciar metricas (solo para testing)."""
+    guardar_metricas({
+        "total_preguntas": 0,
+        "preguntas_resueltas": 0,
+        "preguntas_escaladas": 0,
+        "sesiones_iniciadas": 0,
+        "ultima_actualizacion": datetime.now().isoformat()
+    })
+    return {"mensaje": "Metricas reiniciadas"}
+
+
 @app.post("/chat", tags=["Chat"], summary="Enviar pregunta (respuesta completa)")
 @limiter.limit("20/minute")
 async def chat(request: Request, p: Pregunta):
@@ -140,6 +206,8 @@ async def chat(request: Request, p: Pregunta):
             "question": p.texto
         })
         
+        registrar_interaccion(confianza)
+        
         return {
             "respuesta": respuesta,
             "fuentes": fuentes,
@@ -162,7 +230,10 @@ async def chat_stream(request: Request, p: Pregunta):
     
     Retorna eventos SSE con: fuentes, confianza, chunks de texto, y fin.
     """
+    confianza_registrada = False
+    
     async def generate():
+        nonlocal confianza_registrada
         try:
             docs = retriever.invoke(p.texto)
             fuentes = obtener_fuentes(docs)
@@ -184,6 +255,10 @@ async def chat_stream(request: Request, p: Pregunta):
                 yield f"data: {json.dumps({'tipo': 'chunk', 'valor': chunk})}\n\n"
             
             yield f"data: {json.dumps({'tipo': 'fin'})}\n\n"
+            
+            if not confianza_registrada:
+                registrar_interaccion(confianza)
+                confianza_registrada = True
             
         except Exception as e:
             yield f"data: {json.dumps({'tipo': 'error', 'valor': str(e)})}\n\n"
