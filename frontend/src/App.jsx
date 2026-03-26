@@ -175,106 +175,6 @@ function TypingIndicator() {
   )
 }
 
-function MetricsPanel({ metrics, onClose }) {
-  if (!metrics) return null
-  return (
-    <div style={{
-      position: "fixed",
-      bottom: "100px",
-      right: "24px",
-      width: "320px",
-      background: COLORES.blanco,
-      borderRadius: "16px",
-      boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
-      border: `1px solid ${COLORES.grisClaro}`,
-      padding: "20px",
-      zIndex: 1000,
-      animation: "slideUp 0.3s ease-out"
-    }}>
-      <div style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: "16px",
-        paddingBottom: "12px",
-        borderBottom: `1px solid ${COLORES.grisClaro}`
-      }}>
-        <h3 style={{ 
-          fontSize: "16px", 
-          fontWeight: "700", 
-          color: COLORES.azul,
-          margin: 0
-        }}>
-          Estadisticas
-        </h3>
-        <button 
-          onClick={onClose}
-          style={{
-            background: "none",
-            border: "none",
-            fontSize: "20px",
-            cursor: "pointer",
-            color: COLORES.gris,
-            padding: "4px"
-          }}
-        >
-          x
-        </button>
-      </div>
-      
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-        <MetricCard 
-          label="Total Preguntas" 
-          value={metrics.total_preguntas} 
-          color={COLORES.azul}
-        />
-        <MetricCard 
-          label="Resueltas" 
-          value={metrics.preguntas_resueltas} 
-          color={COLORES.verde}
-        />
-        <MetricCard 
-          label="Escaladas" 
-          value={metrics.preguntas_escaladas} 
-          color={COLORES.amarillo}
-        />
-        <MetricCard 
-          label="Tasa Resolucion" 
-          value={`${metrics.tasa_resolucion}%`} 
-          color={COLORES.azul}
-        />
-      </div>
-    </div>
-  )
-}
-
-function MetricCard({ label, value, color }) {
-  return (
-    <div style={{
-      background: COLORES.fondo,
-      borderRadius: "10px",
-      padding: "12px",
-      textAlign: "center"
-    }}>
-      <div style={{
-        fontSize: "24px",
-        fontWeight: "700",
-        color: color,
-        marginBottom: "4px"
-      }}>
-        {value}
-      </div>
-      <div style={{
-        fontSize: "11px",
-        color: COLORES.gris,
-        fontWeight: "500"
-      }}>
-        {label}
-      </div>
-    </div>
-  )
-}
-
 const SUGERENCIAS = [
   "¿Qué documentos necesito para una vinculación?",
   "¿Qué es SARLAFT?",
@@ -290,30 +190,12 @@ export default function App() {
   ])
   const [input, setInput] = useState("")
   const [cargando, setCargando] = useState(false)
-  const [metrics, setMetrics] = useState(null)
-  const [showMetrics, setShowMetrics] = useState(false)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [mensajes, cargando])
-
-  useEffect(() => {
-    cargarMetrics()
-  }, [mensajes])
-
-  const cargarMetrics = async () => {
-    try {
-      const res = await fetch(`${API_URL}/metrics`)
-      if (res.ok) {
-        const data = await res.json()
-        setMetrics(data)
-      }
-    } catch (e) {
-      console.log("No se pudieron cargar metricas")
-    }
-  }
 
   const enviar = async (texto) => {
     const pregunta = (texto || input).trim()
@@ -451,11 +333,6 @@ export default function App() {
           50% { opacity: 0.5; }
         }
         
-        @keyframes slideUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: ${COLORES.grisClaro}; border-radius: 4px; }
@@ -524,27 +401,6 @@ export default function App() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <button 
-              onClick={() => setShowMetrics(!showMetrics)}
-              style={{
-                background: "rgba(255,255,255,0.15)",
-                border: "1px solid rgba(255,255,255,0.3)",
-                borderRadius: "8px",
-                padding: "6px 12px",
-                color: "white",
-                fontSize: "12px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                fontFamily: "'Kiffo BDB', sans-serif"
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-              </svg>
-              Estadisticas
-            </button>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <div style={{
                 width: "8px", 
@@ -557,8 +413,6 @@ export default function App() {
             </div>
           </div>
         </div>
-
-        {showMetrics && <MetricsPanel metrics={metrics} onClose={() => setShowMetrics(false)} />}
 
         {/* Chat container */}
         <div style={{
