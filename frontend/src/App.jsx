@@ -1,7 +1,15 @@
 import { useState, useRef, useEffect } from "react"
 import Logo from "./Logo.png"
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"
+const getApiUrlFromParams = () => {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('apiUrl') || null
+}
+
+const isIframe = window.self !== window.top
+const API_URL = isIframe 
+  ? (getApiUrlFromParams() || 'http://localhost:8000')
+  : (import.meta.env.VITE_API_URL || "http://localhost:8000")
 
 const COLORES = {
   azul: "#0033A0",
@@ -353,7 +361,6 @@ export default function App() {
         fontFamily: "'Montserrat', 'Segoe UI', sans-serif"
       }}>
 
-        {/* Header */}
         <div style={{
           width: "100%",
           background: `linear-gradient(135deg, ${COLORES.azul} 0%, ${COLORES.azulOscuro} 100%)`,
@@ -406,7 +413,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Chat container */}
         <div style={{
           width: "100%",
           maxWidth: "900px",
@@ -417,7 +423,6 @@ export default function App() {
           padding: "0 24px 24px"
         }}>
 
-          {/* Mensajes */}
           <div style={{
             flex: 1,
             overflowY: "auto",
@@ -430,7 +435,6 @@ export default function App() {
               <MensajeItem key={i} mensaje={m} index={i} />
             ))}
 
-            {/* Sugerencias */}
             {mostrarSugerencias && (
               <div style={{ 
                 marginTop: "24px",
@@ -474,7 +478,6 @@ export default function App() {
             <div ref={bottomRef} />
           </div>
 
-          {/* Input */}
           <div style={{
             background: COLORES.blanco,
             borderRadius: "20px",

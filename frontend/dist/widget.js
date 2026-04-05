@@ -7,7 +7,11 @@
       var height = options.height || '600px';
       var theme = options.theme || 'light';
       var apiUrl = options.apiUrl || 'http://127.0.0.1:8000';
-      var baseUrl = options.baseUrl || window.location.origin;
+      var baseUrl = options.baseUrl || window.location.origin || 'http://localhost:5173';
+      
+      if (baseUrl.indexOf('file://') === 0) {
+        baseUrl = 'http://localhost:5173';
+      }
 
       var container = document.getElementById(containerId);
       if (!container) {
