@@ -1,7 +1,8 @@
 {
-  "total_preguntas": 47,
-  "preguntas_resueltas": 47,
-  "preguntas_escaladas": 0,
+  "total_preguntas": 59,
+  "preguntas_resueltas": 12,
+  "preguntas_escaladas": 47,
   "sesiones_iniciadas": 0,
-  "ultima_actualizacion": "2026-04-05T01:55:59.078698"
+  "tickets_creados": 1,
+  "ultima_actualizacion": "2026-06-16T14:46:52.432223"
 }

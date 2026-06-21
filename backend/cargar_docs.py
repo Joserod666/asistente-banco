@@ -24,6 +24,18 @@ imagenes_encontradas = 0
 print("\nInicializando OCR (solo la primera vez)...")
 reader = easyocr.Reader(['es', 'en'], gpu=False)
 
+def clasificar_archivo(archivo):
+    name = archivo.lower()
+    if any(k in name for k in ["carpeta", "inventario", "ingreso", "usuario", "jds", "jop"]):
+        return "A"
+    elif "gdo" in name or "operaciones" in name:
+        return "B"
+    elif "gestor" in name:
+        return "C"
+    elif "vinculacion" in name or "pj" in name:
+        return "F"
+    return "D"
+
 for archivo in os.listdir(CARPETA_DOCS):
     ruta = os.path.join(CARPETA_DOCS, archivo)
     
@@ -36,6 +48,7 @@ for archivo in os.listdir(CARPETA_DOCS):
             for doc in docs:
                 doc.metadata["fuente"] = archivo
                 doc.metadata["tipo"] = "pdf"
+                doc.metadata["categoria"] = clasificar_archivo(archivo)
             documentos.extend(docs)
             pdfs_encontrados += 1
         except Exception as e:
@@ -50,7 +63,7 @@ for archivo in os.listdir(CARPETA_DOCS):
             if texto.strip():
                 doc = Document(
                     page_content=texto.strip(),
-                    metadata={"fuente": archivo, "tipo": "imagen"}
+                    metadata={"fuente": archivo, "tipo": "imagen", "categoria": clasificar_archivo(archivo)}
                 )
                 documentos.append(doc)
                 print(f"  Texto extraido: {len(texto)} caracteres")
@@ -70,8 +83,8 @@ if len(documentos) == 0:
     exit()
 
 splitter = RecursiveCharacterTextSplitter(
-    chunk_size=500,
-    chunk_overlap=50
+    chunk_size=1000,
+    chunk_overlap=150
 )
 fragmentos = splitter.split_documents(documentos)
 print(f"Total fragmentos creados: {len(fragmentos)}")

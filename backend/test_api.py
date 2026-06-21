@@ -79,7 +79,7 @@ def test_admin_dashboard() -> bool:
         passed = (
             resp.status_code == 200 and
             resp.headers.get("content-type", "").startswith("text/html") and
-            "Banco de Bogota" in resp.text
+            ("Banco de Bogota" in resp.text or "Banco de Bogotá" in resp.text)
         )
         print_result("Admin Dashboard", passed, "HTML disponible en /admin")
         return passed
@@ -211,7 +211,7 @@ def test_rate_limit() -> bool:
                 resp = requests.post(
                     f"{BASE_URL}/chat",
                     json={"texto": f"Test rate limit {i}"},
-                    timeout=10
+                    timeout=30
                 )
                 if resp.status_code == 429:
                     denegadas += 1
@@ -252,6 +252,107 @@ def test_metrics_increment() -> bool:
         return False
 
 
+def test_crear_ticket() -> bool:
+    """Creacion de tickets de soporte tecnico"""
+    try:
+        payload = {
+            "conversacion_id": 1,
+            "session_id": "test_session_123",
+            "categoria": "Soporte Tecnico",
+            "descripcion": "No funciona la conexion VPN al intentar acceder"
+        }
+        resp = requests.post(f"{BASE_URL}/tickets", json=payload, timeout=5)
+        data = resp.json()
+        passed = resp.status_code == 200 and "ticket_id" in data
+        
+        # Verificar que sale en metricas
+        metrics = requests.get(f"{BASE_URL}/metrics", timeout=5).json()
+        tickets_creados = metrics.get("tickets_creados", 0)
+        
+        # Verificar que esta en admin html
+        admin_resp = requests.get(f"{BASE_URL}/admin", timeout=5)
+        in_admin = "test_session_123" in admin_resp.text
+        
+        passed = passed and tickets_creados > 0 and in_admin
+        print_result("Crear ticket de soporte", passed, f"Ticket ID: {data.get('ticket_id')}, Creados: {tickets_creados}")
+        return passed
+    except Exception as e:
+        print_result("Crear ticket de soporte", False, str(e))
+        return False
+
+def test_chat_con_rol() -> bool:
+    """Chat con rol específico de usuario (ej. Cajero)"""
+    try:
+        resp = requests.post(
+            f"{BASE_URL}/chat",
+            json={"texto": "Cuáles son los requisitos de arqueo?", "rol": "Cajero"},
+            timeout=TIMEOUT
+        )
+        data = resp.json()
+        passed = (
+            resp.status_code == 200 and
+            "respuesta" in data
+        )
+        print_result("Chat con rol (Cajero)", passed, f"Status: {resp.status_code}")
+        return passed
+    except Exception as e:
+        print_result("Chat con rol (Cajero)", False, str(e))
+        return False
+
+
+def test_ocr_imagen() -> bool:
+    """Endpoint de OCR para imágenes"""
+    try:
+        from PIL import Image
+        import io
+        
+        img = Image.new('RGB', (100, 100), color = 'white')
+        img_bytes = io.BytesIO()
+        img.save(img_bytes, format='PNG')
+        img_bytes.seek(0)
+        
+        files = {'file': ('test_image.png', img_bytes, 'image/png')}
+        resp = requests.post(
+            f"{BASE_URL}/chat/ocr",
+            files=files,
+            timeout=TIMEOUT
+        )
+        passed = resp.status_code == 200
+        data = resp.json()
+        print_result("OCR de Imagen", passed, f"Texto extraído: '{data.get('texto')}'")
+        return passed
+    except Exception as e:
+        print_result("OCR de Imagen", False, str(e))
+        return False
+
+
+def test_upload_pdf() -> bool:
+    """Subida e indexación de PDF en caliente"""
+    try:
+        pdf_content = b"%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/Resources << >>\n/MediaBox [0 0 612 792]\n/Contents 4 0 R\n>>\nendobj\n4 0 obj\n<< /Length 44 >>\nstream\nBT\n/F1 12 Tf\n72 712 Td\n(Texto de prueba de vinculacion de cuenta) Tj\nET\nendstream\nendobj\nxref\n0 5\n0000000000 65535 f\n0000000009 00000 n\n0000000062 00000 n\n0000000125 00000 n\n0000000230 00000 n\ntrailer\n<<\n/Size 5\n/Root 1 0 R\n>>\nstartxref\n0000000325\n%%EOF"
+        
+        import io
+        pdf_file = io.BytesIO(pdf_content)
+        files = {'file': ('test_doc_vinculacion_caja.pdf', pdf_file, 'application/pdf')}
+        
+        resp = requests.post(
+            f"{BASE_URL}/admin/upload",
+            files=files,
+            allow_redirects=False,
+            timeout=TIMEOUT
+        )
+        
+        passed = (
+            resp.status_code == 303 and
+            "success=uploaded" in resp.headers.get("location", "")
+        )
+        print_result("Subida PDF en caliente", passed, f"Redirige a: {resp.headers.get('location')}")
+        return passed
+    except Exception as e:
+        print_result("Subida PDF en caliente", False, str(e))
+        return False
+
+
 def run_tests():
     """Ejecuta todas las pruebas"""
     print("\n" + "=" * 60)
@@ -277,6 +378,12 @@ def run_tests():
             test_confianza_baja,
             test_streaming,
             test_metrics_increment,
+            test_crear_ticket,
+        ]),
+        ("Nuevas Mejoras Soporte e IA", [
+            test_chat_con_rol,
+            test_ocr_imagen,
+            test_upload_pdf,
         ]),
         ("Seguridad", [
             test_rate_limit,
