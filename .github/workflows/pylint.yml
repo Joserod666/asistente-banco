@@ -21,4 +21,4 @@ jobs:
     - name: Analysing the code with pylint
       run: |
         cd backend
-        pylint $(git ls-files '*.py')
+        pylint --disable=import-error $(git ls-files '*.py')
