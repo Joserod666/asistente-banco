@@ -1,4 +1,4 @@
-# Presentación Técnica - Asistente Virtual RAG
+# Presentación Técnica - Asistente Virtual "Helpdesk Copilot" RAG
 ## Banco de Bogotá
 
 ---
@@ -8,291 +8,147 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      USUARIO FINAL                          │
-│               (Funcionario del Banco)                       │
+│         (Cajero, Asesor, Director, Analista TI)             │
 └─────────────────────┬───────────────────────────────────────┘
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    FRONTEND (React)                         │
-│  • Widget embebible                                       │
-│  • Interfaz de chat moderna                               │
-│  • Tipografía oficial del banco (Kiffo BDB)                │
+│  • Vista Híbrida: Widget flotante / Pantalla completa       │
+│  • Selector de Roles (General, Cajero, Director, TI)        │
+│  • Diagnóstico Interactivo (Botones Rápidos)                │
+│  • Carga de Imagen para Soporte OCR                         │
 └─────────────────────┬───────────────────────────────────────┘
-                      │ HTTPS
+                      │ HTTPS (JSON / Multipart / SSE Streams)
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  BACKEND (FastAPI)                          │
-│  • API REST con streaming SSE                              │
-│  • Rate limiting (20 req/min)                             │
-│  • Métricas de uso                                       │
+│  • Pipeline RAG con LangChain                               │
+│  • Rate Limiting dinámico por IP (20 req/min)               │
+│  • Procesador OCR con EasyOCR local                         │
+│  • Ingestor en Caliente para PDFs                           │
 └─────────────────────┬───────────────────────────────────────┘
                       │
-          ┌───────────┴───────────┐
-          ▼                       ▼
-┌──────────────────┐    ┌──────────────────────────────────┐
-│    CHROMADB       │    │          GROQ (LLM)               │
-│  Base Vectorial   │    │   Modelo Llama 3.1 (8B)           │
-│  Embeddings locales│    │   Respuestas en español          │
-└──────────────────┘    └──────────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────────────────────────────────────┐
-│              BASE DE CONOCIMIENTO                           │
-│     PDF + Imágenes (OCR) → Textos → Fragmentos              │
-└─────────────────────────────────────────────────────────────┘
+          ┌───────────┼───────────┬───────────┐
+          ▼           ▼           ▼           ▼
+ ┌───────────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────┐
+ │   CHROMADB    │ │   GROQ   │ │  SQLITE  │ │  DOCUMENTOS   │
+ │ Base Vectorial│ │ (Llama   │ │ Base de  │ │ Almacén local │
+ │ Embeddings HF │ │ 3.1 8B)  │ │ Tickets  │ │ de manuales   │
+ └───────────────┘ └──────────┘ └──────────┘ └───────────────┘
 ```
 
 ---
 
 ## 2. STACK TECNOLÓGICO
 
-| Componente | Tecnología | Ventaja |
-|------------|-----------|--------|
-| **Frontend** | React + Vite | Carga rápida, bundle pequeño (202KB) |
-| **Backend** | FastAPI | Alto rendimiento, autodocs |
-| **Base de datos** | ChromaDB | Vectorial, embeddings locales |
-| **LLM** | Groq (Llama 3.1) | Ultra rápido, bajo costo |
-| **Embeddings** | HuggingFace | Gratis, offline |
-| **OCR** | EasyOCR | Multilingüe (español) |
+| Componente | Tecnología | Ventaja / Rol |
+| :--- | :--- | :--- |
+| **Frontend** | React 18 + Vite | Carga ultra rápida (<1s), interfaz reactiva con CSS vanilla premium. |
+| **Backend** | FastAPI | Framework asíncrono de alto rendimiento con autodocumentación interactiva. |
+| **Base Vectorial** | ChromaDB | Almacenamiento local de embeddings semánticos para búsquedas ultrarrápidas. |
+| **Embeddings** | HuggingFace (`all-MiniLM-L6-v2`) | Modelos de vectores locales y gratuitos (ejecución offline). |
+| **OCR local** | EasyOCR + PyTorch | Extracción de texto de capturas de pantalla de errores sin salir del host. |
+| **Base de Datos** | SQLite | Base de datos relacional integrada para auditoría de tickets de soporte. |
+| **LLM** | Groq (Llama 3.1 8B) | Inferencia ultra rápida (< 3 segundos) con respuestas de nivel humano. |
 
 ---
 
-## 3. COMPONENTES PRINCIPALES
+## 3. COMPONENTES Y FLUJOS PRINCIPALES
 
-### 3.1 Pipeline RAG (Retrieval Augmented Generation)
+### 3.1 Pipeline RAG Multimodal con OCR
 
 ```
-Usuario pregunta
-      │
-      ▼
-┌─────────────────┐
-│  EMBEDDINGS      │ → Convierte pregunta a vector
-│  (HuggingFace)  │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   CHROMADB       │ → Busca fragmentos similares
-│   (Vector DB)   │   k=6 resultados
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   CONTEXTO       │ → Combina fragmentos
-│   + HISTORIAL    │   + historial conversacional
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   LLM (GROQ)    │ → Genera respuesta natural
-│   Llama 3.1     │   en español, sin alucinaciones
-└─────────────────┘
+  Captura de Pantalla (Frontend)
+             │
+             ▼
+      [ POST /chat/ocr ]
+             │
+      ┌──────┴──────┐
+      ▼             ▼
+┌───────────┐ ┌───────────┐
+│  EasyOCR  │ │ EMBEDDINGS│ → Convierte texto de consulta a vector
+│  (Local)  │ │  (Local)  │
+└─────┬─────┘ └─────┬─────┘
+      │             │
+      │ Extrae      ▼
+      │ error  ┌───────────┐
+      │ texto  │ CHROMADB  │ → Recupera fragmentos de manuales (k=6)
+      ▼        └─────┬─────┘
+┌────────────────────┴──────┐
+│       COMBINADOR DE       │ → Inyecta: Prompt por Rol + Contexto PDF
+│          CONTEXTO         │   + Historial de chat + Texto del OCR
+└────────────┬──────────────┘
+             │
+             ▼
+┌───────────────────────────┐
+│     GROQ LLM (STREAM)     │ → Genera respuesta con streaming en vivo
+└───────────────────────────┘
 ```
 
-### 3.2 Streaming de Respuestas
+### 3.2 Ingestión "en Caliente" (Hot Indexing)
+* **Antes:** Se requería ejecutar scripts offline para recrear la base vectorial.
+* **Ahora:** Un administrador sube un PDF a través de `/admin`, y el backend ejecuta el pipeline (Splitter -> Embeddings -> ChromaDB insertion) en caliente, estando disponible para consultas inmediatamente.
 
-```javascript
-// El usuario ve la respuesta aparecer palabra por palabra
-// como en ChatGPT - mejor UX percibida
-```
-
-### 3.3 Historial Conversacional
-
-```javascript
-// Cada pregunta incluye el historial previo
-// El LLM mantiene contexto entre preguntas
-{
-  "texto": "¿Y si es una SAS?",
-  "historial": [
-    {"rol": "usuario", "texto": "¿Qué docs necesito?"},
-    {"rol": "asistente", "texto": "Para abrir cuenta necesitas..."}
-  ]
-}
-```
+### 3.3 Diagnóstico Interactivo (Quick Replies)
+* El LLM genera guías técnicas estructuradas que el frontend convierte en botones dinámicos (ej: `[Boton: Sí, continuar]`). Esto permite crear árboles de decisión automatizados de manera interactiva.
 
 ---
 
-## 4. FUNCIONALIDADES IMPLEMENTADAS
+## 4. FUNCIONALIDADES CLAVE IMPLEMENTADAS
 
-### 4.1 Chat Inteligente
-- ✅ Streaming en tiempo real
-- ✅ Historial de conversación
-- ✅ Contexto de documentos
-- ✅ Respuestas en español
+### 4.1 Chat Inteligente & Multimodal
+* ✅ Respuestas en streaming palabra por palabra.
+* ✅ Carga de imágenes con diagnóstico OCR.
+* ✅ Historial conversacional completo.
 
-### 4.2 Sistema de Confianza
-- ✅ Detecta cuando no hay suficiente información
-- ✅ Muestra advertencia al usuario
-- ✅ Sugiere escalar a humano
+### 4.2 Soporte de Nivel 2 (Mesa de Ayuda)
+* ✅ Detección automática de insolubilidad.
+* ✅ Botón para escalado a especialista humano.
+* ✅ Persistencia de tickets de soporte en SQLite.
 
-### 4.3 Métricas y Analytics
-- ✅ Total de preguntas
-- ✅ Preguntas resueltas por IA
-- ✅ Preguntas escaladas
-- ✅ Tasa de resolución (ROI)
-- ✅ Dashboard visual para admins
+### 4.3 Control de Roles y Contexto
+* ✅ Prompt personalizado según el rol seleccionado (`General`, `Cajero`, `Director de Oficina`, `Analista TI`).
+* ✅ Restricciones de seguridad para evitar fugas de información.
 
-### 4.4 Seguridad
-- ✅ Rate limiting (20 req/min por IP)
-- ✅ Manejo de errores robusto
-- ✅ Timeout de 30 segundos
-
-### 4.5 Widget Emebible
-```html
-<!-- 3 líneas para embeber en cualquier página -->
-<script src="widget.js"></script>
-<div id="banco-chat"></div>
-<script>BancoChat.init({container: '#banco-chat'});</script>
-```
+### 4.4 Dashboard de Control Administrativo
+* ✅ Gráficas de volumen y tasa de resolución (ROI).
+* ✅ Visualizador y gestor de tickets en cola.
+* ✅ Panel para carga e indexación en vivo de PDFs.
 
 ---
 
-## 5. VENTAJAS PARA EL BANCO
+## 5. MÉTRICAS DE RENDIMIENTO
 
-### 5.1 Reducción de Carga Operativa
-```
-Antes: 100 tickets/día de consultas internas
-Ahora: ~80 resueltos por IA (80%)
-       ~20 escalados a humanos
-
-Ahorro estimado: 80 horas/mes de trabajo
-```
-
-### 5.2 Disponibilidad 24/7
-- El asistente responde instantáneamente
-- Sin esperas telefónicas
-- Sin horarios de atención
-
-### 5.3 Consistencia
-- Todas las respuestas basadas en documentación oficial
-- Sin errores humanos
-- Mismo nivel de información para todos
-
-### 5.4 Escalabilidad
-- Sin límite de conversaciones simultáneas
-- Costo marginal cero por consulta adicional
+| Métrica | Valor | Objetivo |
+| :--- | :--- | :--- |
+| **Tiempo de Inferencia Inicial** | < 1.2 segundos | < 3.0 segundos |
+| **Tamaño de Bundle Frontend** | 205 KB | Mínima latencia de carga |
+| **Precisión de Búsqueda Semántica** | > 85% de similitud | Minimizar falsos positivos |
+| **Tasa de Resolución Estimada** | 80% de consultas directas | Reducir carga de Nivel 1 |
 
 ---
 
-## 6. MÉTRICAS DE RENDIMIENTO
+## 6. SEGURIDAD Y CONTROL
 
-| Métrica | Valor |
-|---------|-------|
-| Tiempo de respuesta (streaming) | < 3 segundos |
-| Tamaño del bundle | 202 KB (gzip: 64KB) |
-| Rate limit | 20 req/min/IP |
-| Documentos soportados | PDF + Imágenes (OCR) |
-| Embeddings | Locales (offline) |
-| Modelo LLM | Groq Llama 3.1 (8B) |
+* **Rate Limiting:** Control de concurrencia y prevención de abusos (20 peticiones por minuto por IP).
+* **Robustez ante Caídas:** Si la API de Groq o el OCR fallan, el sistema captura el error y sugiere al usuario generar un ticket directamente, evitando que la interfaz se congele.
+* **Privacidad de Datos:** Almacenamiento local de manuales y tickets. Los nombres de archivos internos no se exponen al cliente final.
 
 ---
 
-## 7. SEGURIDAD
+## 7. MANTENIMIENTO Y OPERACIÓN
 
-### 7.1 Rate Limiting
-- Protege contra abuse
-- Control de costos
-- 20 peticiones por minuto por IP
+### Actualización de Manuales
+1. **Vía Panel UI:** Cargar en `/admin` (Indexación en caliente).
+2. **Vía Script CLI:**
+   ```bash
+   python backend/cargar_docs.py
+   ```
 
-### 7.2 Manejo de Errores
-| Error | Respuesta |
-|-------|----------|
-| Timeout | "La solicitud tardó demasiado" |
-| Servidor caído | "Servicio no disponible" |
-| Rate limit | "Demasiadas solicitudes" |
-
-### 7.3 Confidencialidad
-- Los nombres de documentos NO se exponen
-- Solo muestra "Documentación Interna"
-- Historial de conversación en memoria (no persiste)
+### Monitoreo de Tickets
+* Acceder a `http://localhost:5173/admin` para revisar el buzón de incidencias de Nivel 2 escaladas por los funcionarios.
 
 ---
 
-## 8. ENDPOINTS API
-
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| GET | `/` | Estado del servicio |
-| GET | `/health` | Monitoreo |
-| GET | `/metrics` | Estadísticas (JSON) |
-| GET | `/admin` | Dashboard visual |
-| POST | `/chat` | Chat completo |
-| POST | `/chat/stream` | Chat con streaming |
-
-Swagger UI: `/docs`
-
----
-
-## 9. DESPLIEGUE
-
-### 9.1 Requisitos
-- Python 3.10+
-- Node.js 18+
-- 4GB RAM mínimo
-
-### 9.2 Variables de Entorno
-```bash
-# Backend
-GROQ_API_KEY=your_key
-
-# Frontend
-VITE_API_URL=https://api.bancobogota.com
-```
-
-### 9.3 Docker (opcional)
-```bash
-# Backend
-docker build -t asistente-backend ./backend
-docker run -p 8000:8000 asistente-backend
-
-# Frontend
-npm run build
-# Servir dist/ con nginx
-```
-
----
-
-## 10. MANTENIMIENTO
-
-### 10.1 Actualizar Base de Conocimiento
-```bash
-cd backend
-python cargar_docs.py
-```
-- Lee PDFs automáticamente
-- Procesa imágenes con OCR
-- Reindexa en ChromaDB
-
-### 10.2 Monitoreo
-- Dashboard: `/admin`
-- Métricas: `/metrics`
-- Logs: Terminal del backend
-
----
-
-## 11. FUTURAS MEJORAS
-
-| Mejora | Prioridad | Esfuerzo |
-|--------|-----------|----------|
-| Autenticación JWT | Alta | Medio |
-| Panel admin de documentos | Media | Alto |
-| Dashboard Grafana | Media | Bajo |
-| WhatsApp/Slack bot | Baja | Alto |
-
----
-
-## 12. RESUMEN EJECUTIVO
-
-✅ **Asistente virtual RAG** para consultas internas del banco
-✅ **Respuestas instantáneas** con streaming
-✅ **Contexto de documentos** oficiales
-✅ **Métricas de ROI** en tiempo real
-✅ **Widget embebible** en 3 líneas
-✅ **Seguro y robusto** con rate limiting
-✅ **Bajo costo** (Groq tiene tier gratuito)
-
-**ROI esperado:** 80% de tickets resueltos por IA
-
----
-
-¿Preguntas?
+¿Preguntas sobre la implementación o la arquitectura del Copilot?
