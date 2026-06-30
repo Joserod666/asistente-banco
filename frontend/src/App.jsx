@@ -125,16 +125,27 @@ export default function App() {
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
+      let streamBuffer = ""
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        const chunk = decoder.decode(value)
-        const lineas = chunk.split("\n").filter(l => l.startsWith("data: "))
+        streamBuffer += decoder.decode(value, { stream: true })
+        const lineas = streamBuffer.split("\n")
+        streamBuffer = lineas.pop()
 
         for (const linea of lineas) {
-          const data = JSON.parse(linea.slice(6))
+          const trimmed = linea.trim()
+          if (!trimmed || !trimmed.startsWith("data: ")) continue
+
+          let data
+          try {
+            data = JSON.parse(trimmed.slice(6))
+          } catch (e) {
+            console.error("Error parsing JSON line:", trimmed, e)
+            continue
+          }
           
           if (data.tipo === "fuentes") {
             fuentes = data.valor
@@ -298,16 +309,27 @@ export default function App() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
+      let streamBuffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lineas = chunk.split("\n").filter(l => l.startsWith("data: "));
+        streamBuffer += decoder.decode(value, { stream: true });
+        const lineas = streamBuffer.split("\n");
+        streamBuffer = lineas.pop();
 
         for (const linea of lineas) {
-          const data = JSON.parse(linea.slice(6));
+          const trimmed = linea.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+
+          let data;
+          try {
+            data = JSON.parse(trimmed.slice(6));
+          } catch (e) {
+            console.error("Error parsing JSON line:", trimmed, e);
+            continue;
+          }
           
           if (data.tipo === "fuentes") {
             fuentes = data.valor;
