@@ -852,3 +852,9 @@ def crear_nuevo_ticket(t: TicketRequest):
         return {"mensaje": "Ticket creado exitosamente", "ticket_id": ticket_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/tickets", tags=["Tickets"])
+def obtener_tickets():
+    """Obtener el listado completo de todos los tickets en formato JSON."""
+    return db.get_tickets()
